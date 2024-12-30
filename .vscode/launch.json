@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+     {
+        "type": "java",
+        "name": "Launch ImageEditorApp",
+        "request": "launch",
+        "mainClass": "ImageEditorApp.Main",
+        "vmArgs": "--module-path \"C:\\Program Files\\javafx-sdk-21.0.5\\lib\" --add-modules javafx.controls,javafx.fxml",
+        "cwd": "${workspaceFolder}"
+     }
+  ]
+}
+
+
+
+
+  
