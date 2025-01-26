@@ -26,7 +26,7 @@ public class Main extends Application {
     private ListView<String> history;
     private ProgressBar progressBar;
     private File defaultSaveDirectory = new File(System.getProperty("user.home"), "ProcessedImages");
-    private static final int MAX_THREADS = 4; // Número máximo de hilos concurrentes
+    private static final int MAX_THREADS = 4; // Número máximo imágenes concurrentemente
     private ExecutorService executorService; // Pool de hilos
 
     private static final double FIXED_IMAGE_WIDTH = 200;
@@ -94,19 +94,19 @@ public class Main extends Application {
 
     private Button createBatchProcessButton(Stage primaryStage) {
         Button batchProcessButton = new Button("Procesar Carpeta");
-
+    
         batchProcessButton.setOnAction(event -> {
             DirectoryChooser directoryChooser = new DirectoryChooser();
             directoryChooser.setTitle("Seleccionar Carpeta");
             File selectedDirectory = directoryChooser.showDialog(primaryStage);
-
+    
             if (selectedDirectory != null && selectedDirectory.isDirectory()) {
                 File[] imageFiles = selectedDirectory.listFiles((dir, name) -> name.endsWith(".png") || name.endsWith(".jpg"));
-
+    
                 if (imageFiles != null && imageFiles.length > 0) {
                     progressBar.setVisible(true);
                     progressBar.setProgress(0);
-
+    
                     Service<Void> batchProcessingService = new Service<>() {
                         @Override
                         protected Task<Void> createTask() {
@@ -114,34 +114,40 @@ public class Main extends Application {
                                 @Override
                                 protected Void call() throws Exception {
                                     int totalFiles = imageFiles.length;
-                                    int processedFiles = 0;
-
+                                    int[] processedFiles = {0};
+    
                                     for (File file : imageFiles) {
-                                        Image image = new Image(file.toURI().toString());
-                                        Platform.runLater(() -> createImageProcessingView(file, image));
-
-                                        processedFiles++;
-                                        updateProgress((double) processedFiles / totalFiles, 1);
-                                        Thread.sleep(1000);
+                                        executorService.submit(() -> {
+                                            try {
+                                                Image image = new Image(file.toURI().toString());
+                                                Platform.runLater(() -> createImageProcessingView(file, image));
+                                                synchronized (processedFiles) {
+                                                    processedFiles[0]++;
+                                                    updateProgress(processedFiles[0], totalFiles);
+                                                }
+                                            } catch (Exception e) {
+                                                Platform.runLater(() -> history.getItems().add("Error procesando archivo: " + file.getName()));
+                                            }
+                                        });
                                     }
                                     return null;
                                 }
                             };
                         }
                     };
-
+    
                     batchProcessingService.setOnSucceeded(e -> {
                         progressBar.setVisible(false);
                         history.getItems().add("Procesamiento completado.");
                     });
-
+    
                     batchProcessingService.setOnFailed(e -> {
                         progressBar.setVisible(false);
                         history.getItems().add("Error durante el procesamiento.");
                     });
-
+    
                     progressBar.progressProperty().bind(batchProcessingService.progressProperty());
-                    executorService.submit(batchProcessingService::start);
+                    batchProcessingService.start();
                 } else {
                     history.getItems().add("No se encontraron imágenes en la carpeta seleccionada.");
                 }
@@ -149,7 +155,7 @@ public class Main extends Application {
                 history.getItems().add("No se seleccionó ninguna carpeta.");
             }
         });
-
+    
         return batchProcessButton;
     }
 
