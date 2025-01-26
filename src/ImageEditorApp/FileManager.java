@@ -9,9 +9,13 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 public class FileManager {
+
+    // Directorio por defecto
     private static final File defaultSaveDirectory = new File(System.getProperty("user.home"), "ProcessedImages");
 
+    // Guarda imagen procesada
     public static void saveImage(File originalFile, Image image) throws Exception {
+        
         if (!defaultSaveDirectory.exists()) {
             defaultSaveDirectory.mkdir();
         }
@@ -31,6 +35,7 @@ public class FileManager {
         ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", new FileOutputStream(saveFile));
     }
 
+    // Verifica existencia del nombre
     public static File getUniqueFile(File file) {
         String name = file.getName();
         String baseName = name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name;

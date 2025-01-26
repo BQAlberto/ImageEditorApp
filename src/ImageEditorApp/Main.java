@@ -4,6 +4,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
@@ -11,6 +12,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.Priority;
@@ -32,12 +34,14 @@ public class Main extends Application {
     private static final double FIXED_IMAGE_WIDTH = 200;
     private static final double FIXED_IMAGE_HEIGHT = 200;
 
+    // Inicio aplicaión
     @Override
     public void start(Stage primaryStage) {
-        executorService = Executors.newFixedThreadPool(MAX_THREADS); // Inicializar el pool de hilos
+        executorService = Executors.newFixedThreadPool(MAX_THREADS); // Inicializa pool de hilos
         SplashScreen.show(primaryStage, () -> initializeMainApplication(primaryStage));
     }
 
+    // Inicializa interfaz
     private void initializeMainApplication(Stage primaryStage) {
         root = new VBox();
         tabPane = new TabPane();
@@ -73,6 +77,7 @@ public class Main extends Application {
         primaryStage.show();
     }
 
+    // Boton para procesar/abrir imagen
     private Button createOpenImagesButton(Stage primaryStage) {
         Button openImagesButton = new Button("Abrir Imágenes");
 
@@ -92,6 +97,7 @@ public class Main extends Application {
         return openImagesButton;
     }
 
+    // Boton para procesar/abrir carpeta completa
     private Button createBatchProcessButton(Stage primaryStage) {
         Button batchProcessButton = new Button("Procesar Carpeta");
     
@@ -119,6 +125,7 @@ public class Main extends Application {
                                     for (File file : imageFiles) {
                                         executorService.submit(() -> {
                                             try {
+                                                Thread.sleep(3000);
                                                 Image image = new Image(file.toURI().toString());
                                                 Platform.runLater(() -> createImageProcessingView(file, image));
                                                 synchronized (processedFiles) {
@@ -159,7 +166,9 @@ public class Main extends Application {
         return batchProcessButton;
     }
 
+    // Vista para procesar imagen cargada
     private void createImageProcessingView(File file, Image image) {
+        final Image originalImage = image;
         HBox imagesBox = new HBox(10);
         imagesBox.setStyle("-fx-alignment: center;");
 
@@ -187,15 +196,46 @@ public class Main extends Application {
 
         Button saveButton = createSaveButton(file, processedImageView);
 
-        VBox imageWithControlsBox = new VBox(10);
-        imageWithControlsBox.getChildren().addAll(imagesBox, filterProgressBar, blackAndWhiteButton, invertColorsButton, increaseBrightnessButton, saveButton);
+        Button restoreButton = new Button("Restaurar");
+        restoreButton.setOnAction(event -> {
+            processedImageView.setImage(originalImage); // Restaurar la imagen original
+        });
+
+        GridPane imageWithControlsGrid = new GridPane();
+        imageWithControlsGrid.setHgap(20); // Espaciado horizontal entre celdas
+        imageWithControlsGrid.setVgap(10); // Espaciado vertical entre celdas
+        imageWithControlsGrid.setStyle("-fx-alignment: center;"); // Centrar elementos
+
+        imageWithControlsGrid.add(imagesBox, 0, 0, 1, 4); //Disposición
+
+        imageWithControlsGrid.add(filterProgressBar, 0, 4, 1, 1); // En la columna izq.
+
+        imageWithControlsGrid.add(restoreButton, 1, 0); // Primera fila de la dcha.
+        imageWithControlsGrid.add(blackAndWhiteButton, 1, 1);
+        imageWithControlsGrid.add(invertColorsButton, 1, 2);
+        imageWithControlsGrid.add(increaseBrightnessButton, 1, 3);
+        imageWithControlsGrid.add(saveButton, 1, 4);
+
+        GridPane.setMargin(restoreButton, new Insets(0, 20, 0, 0)); // Margen dcho.
+        GridPane.setMargin(blackAndWhiteButton, new Insets(0, 20, 0, 0));
+        GridPane.setMargin(invertColorsButton, new Insets(0, 20, 0, 0));
+        GridPane.setMargin(increaseBrightnessButton, new Insets(0, 20, 0, 0));
+        GridPane.setMargin(saveButton, new Insets(0, 20, 0, 0));
+
+
+        // Ajustar las celdas
+        GridPane.setHgrow(imagesBox, Priority.ALWAYS);
+        GridPane.setVgrow(imagesBox, Priority.ALWAYS);
+        GridPane.setHgrow(filterProgressBar, Priority.ALWAYS);
 
         Tab tab = new Tab(file.getName());
         tab.setClosable(true);
-        tab.setContent(imageWithControlsBox);
+        tab.setContent(imageWithControlsGrid);
         tabPane.getTabs().add(tab);
+
     }
 
+    // Boton para aplicar filtro a imagen procesada
     private Button createFilterButton(String filterName, Image originalImage, ImageView processedImageView, String fileName, FilterTask task, ProgressBar filterProgressBar) {
         Button filterButton = new Button(filterName);
 
@@ -207,7 +247,7 @@ public class Main extends Application {
                 @Override
                 protected Image call() throws Exception {
                     updateProgress(0, 100);
-                    Thread.sleep(500);
+                    Thread.sleep(300);
                     for (int i = 0; i <= 100; i++) {
                         updateProgress(i, 100);
                         Thread.sleep(20);
@@ -247,6 +287,7 @@ public class Main extends Application {
         return filterButton;
     }
 
+    // Boton guardado imagen procesada
     private Button createSaveButton(File originalFile, ImageView processedImageView) {
         Button saveButton = new Button("Guardar");
     
@@ -271,6 +312,7 @@ public class Main extends Application {
         return saveButton;
     }
 
+    // Cuadro mensaje popup
     private void showPopup(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
@@ -279,15 +321,18 @@ public class Main extends Application {
         alert.showAndWait();
     }
 
+    // Detiene servicios
     @Override
     public void stop() {
         executorService.shutdown();
     }
 
+    // Metodo inicio aplicacion javafx
     public static void main(String[] args) {
         launch(args);
     }
 
+    // Interfaz aplica filtro
     @FunctionalInterface
     private interface FilterTask {
         Image apply() throws Exception;

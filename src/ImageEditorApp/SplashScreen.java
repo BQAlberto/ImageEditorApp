@@ -9,6 +9,7 @@ import javafx.stage.Stage;
 
 public class SplashScreen {
     
+    // Muestra pantalla bienvenida
     public static void show(Stage primaryStage, Runnable onFinished) {
         Stage splashStage = new Stage();
         StackPane splashRoot = new StackPane();
