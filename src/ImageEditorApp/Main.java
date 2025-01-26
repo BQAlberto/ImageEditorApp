@@ -2,6 +2,7 @@ package ImageEditorApp;
 
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -18,6 +19,8 @@ import javafx.scene.layout.Priority;
 import javax.imageio.ImageIO;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Main extends Application {
 
@@ -26,16 +29,18 @@ public class Main extends Application {
     private ListView<String> history;
     private ProgressBar progressBar;
     private File defaultSaveDirectory = new File(System.getProperty("user.home"), "ProcessedImages");
+    private static final int MAX_THREADS = 4; // Número máximo de hilos concurrentes
+    private ExecutorService executorService; // Pool de hilos
 
     private static final double FIXED_IMAGE_WIDTH = 200;
     private static final double FIXED_IMAGE_HEIGHT = 200;
 
     @Override
     public void start(Stage primaryStage) {
+        executorService = Executors.newFixedThreadPool(MAX_THREADS); // Inicializar el pool de hilos
         showSplashScreen(primaryStage);
     }
 
-    // Pantalla de bienvenida que se muestra al inicio
     private void showSplashScreen(Stage primaryStage) {
         Stage splashStage = new Stage();
         javafx.scene.layout.StackPane splashRoot = new javafx.scene.layout.StackPane();
@@ -44,7 +49,6 @@ public class Main extends Application {
         splashStage.setScene(splashScene);
         splashStage.show();
 
-        // Simula un tiempo de carga antes de abrir la aplicación principal
         Task<Void> loadTask = new Task<>() {
             @Override
             protected Void call() throws Exception {
@@ -63,7 +67,6 @@ public class Main extends Application {
         new Thread(loadTask).start();
     }
 
-    // Inicializa la interfaz principal de la aplicación
     private void initializeMainApplication(Stage primaryStage) {
         root = new VBox();
         tabPane = new TabPane();
@@ -89,7 +92,6 @@ public class Main extends Application {
 
         root.getChildren().addAll(openImagesButton, batchProcessButton, tabPane, history, progressBox);
 
-        // Crear el directorio si no existe
         if (!defaultSaveDirectory.exists()) {
             defaultSaveDirectory.mkdir();
         }
@@ -100,7 +102,6 @@ public class Main extends Application {
         primaryStage.show();
     }
 
-    // Botón para abrir imágenes desde el sistema de archivos
     private Button createOpenImagesButton(Stage primaryStage) {
         Button openImagesButton = new Button("Abrir Imágenes");
 
@@ -120,7 +121,6 @@ public class Main extends Application {
         return openImagesButton;
     }
 
-    // Botón para procesar todas las imágenes dentro de una carpeta
     private Button createBatchProcessButton(Stage primaryStage) {
         Button batchProcessButton = new Button("Procesar Carpeta");
 
@@ -136,47 +136,41 @@ public class Main extends Application {
                     progressBar.setVisible(true);
                     progressBar.setProgress(0);
 
-                    Task<Void> processTask = new Task<>() {
+                    Service<Void> batchProcessingService = new Service<>() {
                         @Override
-                        protected Void call() throws Exception {
-                            int totalFiles = imageFiles.length;
-                            int processedFiles = 0;
+                        protected Task<Void> createTask() {
+                            return new Task<>() {
+                                @Override
+                                protected Void call() throws Exception {
+                                    int totalFiles = imageFiles.length;
+                                    int processedFiles = 0;
 
-                            for (File file : imageFiles) {
-                                Image image = new Image(file.toURI().toString());
-                                Platform.runLater(() -> createImageProcessingView(file, image));
+                                    for (File file : imageFiles) {
+                                        Image image = new Image(file.toURI().toString());
+                                        Platform.runLater(() -> createImageProcessingView(file, image));
 
-                                processedFiles++;
-                                updateProgress((double) processedFiles / totalFiles, 1);
-
-                                Thread.sleep(1000); // Simulamos un proceso largo
-                            }
-                            return null;
-                        }
-
-                        @Override
-                        protected void succeeded() {
-                            super.succeeded();
-                            Platform.runLater(() -> {
-                                history.getItems().add("Procesamiento completado.");
-                                progressBar.setVisible(false);
-                                showPopup("Éxito", "El procesamiento de imágenes se completó con éxito.");
-                            });
-                        }
-
-                        @Override
-                        protected void failed() {
-                            super.failed();
-                            Platform.runLater(() -> {
-                                history.getItems().add("Error durante el procesamiento.");
-                                progressBar.setVisible(false);
-                                showPopup("Error", "Ocurrió un error durante el procesamiento.");
-                            });
+                                        processedFiles++;
+                                        updateProgress((double) processedFiles / totalFiles, 1);
+                                        Thread.sleep(1000);
+                                    }
+                                    return null;
+                                }
+                            };
                         }
                     };
 
-                    progressBar.progressProperty().bind(processTask.progressProperty());
-                    new Thread(processTask).start();
+                    batchProcessingService.setOnSucceeded(e -> {
+                        progressBar.setVisible(false);
+                        history.getItems().add("Procesamiento completado.");
+                    });
+
+                    batchProcessingService.setOnFailed(e -> {
+                        progressBar.setVisible(false);
+                        history.getItems().add("Error durante el procesamiento.");
+                    });
+
+                    progressBar.progressProperty().bind(batchProcessingService.progressProperty());
+                    executorService.submit(batchProcessingService::start);
                 } else {
                     history.getItems().add("No se encontraron imágenes en la carpeta seleccionada.");
                 }
@@ -188,7 +182,6 @@ public class Main extends Application {
         return batchProcessButton;
     }
 
-    // Crea la vista para cada imagen cargada con filtros y botones
     private void createImageProcessingView(File file, Image image) {
         HBox imagesBox = new HBox(10);
         imagesBox.setStyle("-fx-alignment: center;");
@@ -226,7 +219,6 @@ public class Main extends Application {
         tabPane.getTabs().add(tab);
     }
 
-    // Botón para aplicar un filtro
     private Button createFilterButton(String filterName, Image originalImage, ImageView processedImageView, String fileName, FilterTask task, ProgressBar filterProgressBar) {
         Button filterButton = new Button(filterName);
 
@@ -238,10 +230,10 @@ public class Main extends Application {
                 @Override
                 protected Image call() throws Exception {
                     updateProgress(0, 100);
-                    Thread.sleep(500); // Simula un proceso largo
+                    Thread.sleep(500);
                     for (int i = 0; i <= 100; i++) {
                         updateProgress(i, 100);
-                        Thread.sleep(20); // Simula el tiempo del filtro
+                        Thread.sleep(20);
                     }
                     return task.apply();
                 }
@@ -278,7 +270,6 @@ public class Main extends Application {
         return filterButton;
     }
 
-    // Botón para guardar la imagen procesada
     private Button createSaveButton(File originalFile, ImageView processedImageView) {
         Button saveButton = new Button("Guardar");
 
@@ -286,7 +277,6 @@ public class Main extends Application {
             Image imageToSave = processedImageView.getImage();
             if (imageToSave != null) {
                 try {
-                    // Verifica que la imagen tenga un tamaño válido
                     if (imageToSave.getWidth() > 0 && imageToSave.getHeight() > 0) {
                         FileChooser fileChooser = new FileChooser();
                         fileChooser.setTitle("Guardar Imagen");
@@ -301,7 +291,6 @@ public class Main extends Application {
 
                         saveFile = getUniqueFile(saveFile);
 
-                        // Guarda la imagen procesada
                         ImageIO.write(SwingFXUtils.fromFXImage(imageToSave, null), "png", new FileOutputStream(saveFile));
                         history.getItems().add("Imagen guardada: " + saveFile.getAbsolutePath());
                     } else {
@@ -318,7 +307,6 @@ public class Main extends Application {
         return saveButton;
     }
 
-    // Verifica si ya existe un archivo con el mismo nombre y crea uno único
     private File getUniqueFile(File file) {
         String name = file.getName();
         String baseName = name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name;
@@ -331,13 +319,17 @@ public class Main extends Application {
         return uniqueFile;
     }
 
-    // Muestra un popup con el mensaje de éxito o error
     private void showPopup(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    @Override
+    public void stop() {
+        executorService.shutdown();
     }
 
     public static void main(String[] args) {
