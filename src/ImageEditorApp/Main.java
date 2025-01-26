@@ -13,12 +13,9 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.layout.Priority;
 
-import javax.imageio.ImageIO;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -38,33 +35,7 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) {
         executorService = Executors.newFixedThreadPool(MAX_THREADS); // Inicializar el pool de hilos
-        showSplashScreen(primaryStage);
-    }
-
-    private void showSplashScreen(Stage primaryStage) {
-        Stage splashStage = new Stage();
-        javafx.scene.layout.StackPane splashRoot = new javafx.scene.layout.StackPane();
-        splashRoot.getChildren().add(new Label("Bienvenido al Editor de Imágenes"));
-        Scene splashScene = new Scene(splashRoot, 400, 200);
-        splashStage.setScene(splashScene);
-        splashStage.show();
-
-        Task<Void> loadTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                Thread.sleep(3000);
-                return null;
-            }
-
-            @Override
-            protected void succeeded() {
-                Platform.runLater(() -> {
-                    splashStage.close();
-                    initializeMainApplication(primaryStage);
-                });
-            }
-        };
-        new Thread(loadTask).start();
+        SplashScreen.show(primaryStage, () -> initializeMainApplication(primaryStage));
     }
 
     private void initializeMainApplication(Stage primaryStage) {
@@ -272,27 +243,14 @@ public class Main extends Application {
 
     private Button createSaveButton(File originalFile, ImageView processedImageView) {
         Button saveButton = new Button("Guardar");
-
+    
         saveButton.setOnAction(event -> {
             Image imageToSave = processedImageView.getImage();
             if (imageToSave != null) {
                 try {
                     if (imageToSave.getWidth() > 0 && imageToSave.getHeight() > 0) {
-                        FileChooser fileChooser = new FileChooser();
-                        fileChooser.setTitle("Guardar Imagen");
-                        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Imágenes PNG", "*.png"));
-                        fileChooser.setInitialFileName(originalFile.getName().replaceFirst("\\.\\w+$", "") + "_processed.png");
-                        fileChooser.setInitialDirectory(defaultSaveDirectory);
-
-                        File saveFile = fileChooser.showSaveDialog(saveButton.getScene().getWindow());
-                        if (saveFile == null) {
-                            saveFile = new File(defaultSaveDirectory, originalFile.getName().replaceFirst("\\.\\w+$", "") + "_processed.png");
-                        }
-
-                        saveFile = getUniqueFile(saveFile);
-
-                        ImageIO.write(SwingFXUtils.fromFXImage(imageToSave, null), "png", new FileOutputStream(saveFile));
-                        history.getItems().add("Imagen guardada: " + saveFile.getAbsolutePath());
+                        FileManager.saveImage(originalFile, imageToSave);
+                        history.getItems().add("Imagen guardada correctamente.");
                     } else {
                         history.getItems().add("Error: La imagen procesada tiene un tamaño inválido.");
                     }
@@ -303,20 +261,8 @@ public class Main extends Application {
                 history.getItems().add("Error: No hay imagen procesada para guardar.");
             }
         });
-
+    
         return saveButton;
-    }
-
-    private File getUniqueFile(File file) {
-        String name = file.getName();
-        String baseName = name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name;
-        String extension = name.contains(".") ? name.substring(name.lastIndexOf('.')) : "";
-        File uniqueFile = file;
-        int counter = 1;
-        while (uniqueFile.exists()) {
-            uniqueFile = new File(file.getParent(), baseName + "_" + counter++ + extension);
-        }
-        return uniqueFile;
     }
 
     private void showPopup(String title, String message) {
